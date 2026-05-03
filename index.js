@@ -21,14 +21,20 @@ async function processCalculation(channel, status, startNumber, dropType) {
                        (getDrops("🦴") * mults["🦴"]) + (getDrops("🐾") * mults["🐾"]);
     
     const endingNumber = startNumber - 1 + totalDrops;
+    const partiesAdded = endingNumber - startNumber + 1;
 
+    // 1. Tag
     await channel.send(`ʚ💘ɞ「${endingNumber.toLocaleString()} ⋆ ${dropType}」`);
     
+    // 2. MP Message
     if (status === "perm" || status === "mini") {
         await channel.send(`૮(˶ᵔ ᴥᵔ)ა   ɪғ sᴇᴇɴ, ᴘʟᴇᴀsᴇ ʀᴇᴛᴜʀɴ\n  /づ  \\づ.. ⸝⸝ ♡ ⸝⸝ ᴛᴏ ᴘʀᴏᴠᴏᴄᴀᴛɪᴠᴇ.\n━═━═━ [💘] • ᴄᴏʟʟᴀʀ #${endingNumber.toLocaleString()}`);
     } else {
         await channel.send(`ɪғ sᴇᴇɴ, ᴘʟᴇᴀsᴇ ʀᴇᴛᴜʀɴ ᴛᴏ:\n૮(˶ᵔ ᴥᵔ)ა [💘] ${endingNumber.toLocaleString()} • ${dropType}\n  /づ  \\づ.. ⸝⸝ ♡ ᴘʀᴏᴠᴏᴄᴀᴛɪᴠᴇ\n━═━═━═━═━═━═━═`);
     }
+
+    // 3. Parties added
+    await channel.send(`Parties added: ${partiesAdded}`);
 }
 
 client.on('messageCreate', async (message) => {
@@ -52,7 +58,9 @@ client.on('messageCreate', async (message) => {
         const state = userState.get(userId);
         
         if (state.step === 'waiting_for_number') {
-            state.startNumber = parseInt(content);
+            const startNum = parseInt(content);
+            if (isNaN(startNum)) return message.reply("Please provide a valid number.");
+            state.startNumber = startNum;
             state.step = 'waiting_for_drop';
             return message.reply("Please provide the Drop Type:");
         }
