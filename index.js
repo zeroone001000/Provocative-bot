@@ -34,7 +34,7 @@ async function processCalculation(channel, status, startNumber, dropType) {
     }
 
     // 3. Parties added
-    await channel.send(`Parties added: ${partiesAdded}`);
+    await channel.send(`**Parties Added: ${partiesAdded}**`);
 }
 
 client.on('messageCreate', async (message) => {
