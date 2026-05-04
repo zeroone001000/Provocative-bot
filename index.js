@@ -11,16 +11,17 @@ const multipliers = {
 async function processCalculation(channel, status, startNumber, newDropType, previousTag = null) {
     const mults = multipliers[status];
     
-    // 1. Determine Starting Number
+    // 1. Get Tag Number if exists
     let tagNumber = 0;
     if (previousTag) {
         const tagNumberMatch = previousTag.match(/(\d{1,3}(?:,\d{3})*|\d+)/);
         if (tagNumberMatch) tagNumber = parseInt(tagNumberMatch[0].replace(/,/g, ''));
     }
     
-    const effectiveStart = (startNumber !== null) ? startNumber : (tagNumber + 1);
+    // 2. Set effective start
+    const base = (startNumber !== null) ? startNumber : (tagNumber + 1);
     
-    // 2. Extract drops
+    // 3. Extract drops
     const extractDrops = (input) => {
         const drops = { "🌭": 0, "🍖": 0, "🦴": 0, "🐾": 0 };
         const regex = /(\d+)(🌭|🍖|🦴|🐾)/g;
@@ -48,13 +49,12 @@ async function processCalculation(channel, status, startNumber, newDropType, pre
         if (totalDrops[type] > 0) combinedDropType += `${totalDrops[type]}${type}`;
     });
 
-    // 3. Calculate math based on NEW drops only
     const newValue = (newDrops["🌭"] * mults["🌭"]) + 
                      (newDrops["🍖"] * mults["🍖"]) + 
                      (newDrops["🦴"] * mults["🦴"]) + 
                      (newDrops["🐾"] * mults["🐾"]);
     
-    const endingNumber = effectiveStart + newValue - 1;
+    const endingNumber = base + newValue - 1;
     const partiesAdded = newValue;
 
     await channel.send(`ʚ💘ɞ「${endingNumber.toLocaleString()} ⋆ ${combinedDropType}」`);
@@ -84,7 +84,6 @@ client.on('messageCreate', async (message) => {
 
         parts.forEach(part => {
             part = part.trim();
-            // Match standalone numbers that aren't inside a tag or drop string
             if (/^\d{1,3}(?:,\d{3})*|\d+$/.test(part) && !part.match(/(🌭|🍖|🦴|🐾|ʚ|⋆|「)/)) {
                 startNumber = parseInt(part.replace(/,/g, ''));
             } 
