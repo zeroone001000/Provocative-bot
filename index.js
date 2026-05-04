@@ -9,9 +9,9 @@ const multipliers = {
 
 async function processCalculation(channel, status, startNumber, dropString) {
     const mults = multipliers[status];
-    
-    // Extract drops from the combined string (e.g., "1🌭1🐾")
     const drops = { "🌭": 0, "🍖": 0, "🦴": 0, "🐾": 0 };
+    
+    // Only process the dropString passed by the filter
     const regex = /(\d+)(🌭|🍖|🦴|🐾)/g;
     let match;
     while ((match = regex.exec(dropString)) !== null) {
@@ -43,20 +43,22 @@ async function processCalculation(channel, status, startNumber, dropString) {
 
 client.on('messageCreate', async (message) => {
     if (message.author.bot) return;
-    
-    // 1. Identify Status (member/mini/perm)
+
+    // 1. Identify Status
     const statusMatch = message.content.match(/member|mini|perm/i);
     if (!statusMatch) return;
     const status = statusMatch[0].toLowerCase();
 
-    // 2. Identify all numbers
-    const allNumbers = message.content.match(/\d{1,3}(?:,\d{3})*|\d+/g)?.map(n => parseInt(n.replace(/,/g, ''))) || [];
-    
-    // 3. Identify all drops (e.g., 1🌭)
-    const dropMatches = message.content.match(/\d+(🌭|🍖|🦴|🐾)/g) || [];
+    // 2. Remove the "tag" part (anything inside brackets/quotes) before finding drops
+    // This ignores ʚ💘ɞ「30,005 ⋆ 1🐾」 so it doesn't double count
+    const cleanContent = message.content.replace(/ʚ💘ɞ「.*?」/g, '');
 
-    // Simple heuristic: The start number is usually the largest one
+    // 3. Identify all numbers in the clean content
+    const allNumbers = cleanContent.match(/\d{1,3}(?:,\d{3})*|\d+/g)?.map(n => parseInt(n.replace(/,/g, ''))) || [];
     const startNumber = allNumbers.length > 0 ? Math.max(...allNumbers) : null;
+    
+    // 4. Identify drops ONLY in the clean content
+    const dropMatches = cleanContent.match(/\d+(🌭|🍖|🦴|🐾)/g) || [];
     const dropString = dropMatches.join('');
 
     if (status && startNumber && dropString) {
