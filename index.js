@@ -11,6 +11,15 @@ const multipliers = {
 async function processCalculation(channel, status, startNumber, newDropType, previousTag = null) {
     const mults = multipliers[status];
     
+    // Logic to extract starting number from tag if no startNumber is provided (or if we prefer tag's value)
+    let effectiveStart = startNumber;
+    if (previousTag) {
+        const tagNumberMatch = previousTag.match(/(\d{1,3}(?:,\d{3})*|\d+)/);
+        if (tagNumberMatch) {
+            effectiveStart = parseInt(tagNumberMatch[0].replace(/,/g, '')) + 1;
+        }
+    }
+    
     const extractDrops = (input) => {
         const drops = { "🌭": 0, "🍖": 0, "🦴": 0, "🐾": 0 };
         const regex = /(\d+)(🌭|🍖|🦴|🐾)/g;
@@ -47,7 +56,7 @@ async function processCalculation(channel, status, startNumber, newDropType, pre
                      (newDrops["🦴"] * mults["🦴"]) + 
                      (newDrops["🐾"] * mults["🐾"]);
     
-    const endingNumber = startNumber + newValue - 1;
+    const endingNumber = effectiveStart + newValue - 1;
     const partiesAdded = newValue;
 
     await channel.send(`ʚ💘ɞ「${endingNumber.toLocaleString()} ⋆ ${combinedDropType}」`);
@@ -64,6 +73,7 @@ client.on('messageCreate', async (message) => {
     if (message.author.bot) return;
     const userId = message.author.id;
     
+    // Quick Mode regex updated to handle cases where start number might be absent if tag is present
     const match = message.content.match(/^(\w+)\s+(\d{1,3}(?:,\d{3})*|\d+)\s+([^\s]+)(.*)/i);
     if (match) {
         const status = match[1].toLowerCase();
