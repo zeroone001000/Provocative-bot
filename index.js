@@ -1,49 +1,53 @@
-const { Client, GatewayIntentBits } = require('discord.js');
-const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent] });
-
-const userState = new Map();
-const multipliers = {
-    member: { "🌭": 65, "🍖": 30, "🦴": 65, "🐾": 13 },
-    mini:   { "🌭": 67, "🍖": 33, "🦴": 67, "🐾": 13 },
-    perm:   { "🌭": 70, "🍖": 35, "🦴": 70, "🐾": 13 }
-};
-
 async function processCalculation(channel, status, startNumber, newDropType, previousTag = null) {
     const mults = multipliers[status];
+    const emojiMap = { "🌭": "🌭", "🍖": "🍖", "🦴": "🦴", "🐾": "🐾" };
     
-    // 1. Combine Drop Types (extract only the text part from old tag)
-    let combinedDropType = newDropType;
-    if (previousTag) {
-        // Look for content after ⋆ and before 」
-        const oldDropsMatch = previousTag.match(/⋆\s*(.+?)」/);
-        if (oldDropsMatch) {
-            // Take the old text and add the new one
-            combinedDropType = oldDropsMatch[1] + newDropType;
-        }
-    }
-
-    // 2. Calculate sum of drops based ONLY on the NEW drop provided
-    // We only want to add the value of the NEW drop to the starting number
-    const getDrops = (type, dropString) => {
-        const regex = new RegExp(`(\\d+)${type}`, 'g');
-        let total = 0;
+    // 1. Helper to extract numbers and their emojis from input string
+    // This looks for pairs like "1🌭" or just "1"
+    const extractDrops = (input) => {
+        const drops = { "🌭": 0, "🍖": 0, "🦴": 0, "🐾": 0 };
+        // Matches "123🌭" or "123"
+        const regex = /(\d+)(🌭|🍖|🦴|🐾)?/g;
         let match;
-        while ((match = regex.exec(dropString)) !== null) {
-            total += parseInt(match[1]);
+        while ((match = regex.exec(input)) !== null) {
+            const count = parseInt(match[1]);
+            const emoji = match[2] || "🌭"; // Default to 🌭 if no emoji provided
+            if (drops.hasOwnProperty(emoji)) {
+                drops[emoji] += count;
+            }
         }
-        return total;
+        return drops;
     };
 
-    // Calculate value based on the NEW drop only
-    const newValue = (getDrops("🌭", newDropType) * mults["🌭"]) + 
-                     (getDrops("🍖", newDropType) * mults["🍖"]) + 
-                     (getDrops("🦴", newDropType) * mults["🦴"]) + 
-                     (getDrops("🐾", newDropType) * mults["🐾"]);
+    // 2. Combine and Sort Drops
+    const newDrops = extractDrops(newDropType);
+    const oldDrops = previousTag ? extractDrops(previousTag) : { "🌭": 0, "🍖": 0, "🦴": 0, "🐾": 0 };
     
-    const endingNumber = startNumber + newValue;
-    const partiesAdded = endingNumber - startNumber;
+    const totalDrops = {
+        "🌭": newDrops["🌭"] + oldDrops["🌭"],
+        "🍖": newDrops["🍖"] + oldDrops["🍖"],
+        "🦴": newDrops["🦴"] + oldDrops["🦴"],
+        "🐾": newDrops["🐾"] + oldDrops["🐾"]
+    };
 
-    // 3. Output
+    // Build the string: "1🌭1🦴"
+    let combinedDropType = "";
+    ["🌭", "🍖", "🦴", "🐾"].forEach(type => {
+        if (totalDrops[type] > 0) {
+            combinedDropType += `${totalDrops[type]}${type}`;
+        }
+    });
+
+    // 3. Calculate math based on NEW drops only
+    const newValue = (newDrops["🌭"] * mults["🌭"]) + 
+                     (newDrops["🍖"] * mults["🍖"]) + 
+                     (newDrops["🦴"] * mults["🦴"]) + 
+                     (newDrops["🐾"] * mults["🐾"]);
+    
+    const endingNumber = startNumber + newValue - 1;
+    const partiesAdded = newValue; // Added based on new drops
+
+    // 4. Output
     await channel.send(`ʚ💘ɞ「${endingNumber.toLocaleString()} ⋆ ${combinedDropType}」`);
     
     if (status === "perm" || status === "mini") {
@@ -53,41 +57,3 @@ async function processCalculation(channel, status, startNumber, newDropType, pre
     }
     await channel.send(`**Parties Added: ${partiesAdded}**`);
 }
-
-client.on('messageCreate', async (message) => {
-    if (message.author.bot) return;
-    const content = message.content;
-    const userId = message.author.id;
-    const parts = content.split(/\s+/);
-    const cmd = parts[0].toLowerCase();
-
-    // QUICK MODE: Member 30006 1🦴 ʚ💘ɞ「30,005 ⋆ 1🌭」
-    if (parts.length >= 3 && ['member', 'mini', 'perm'].includes(cmd)) {
-        const startNumber = parseInt(parts[1].replace(/,/g, ''));
-        const newDropType = parts[2];
-        const previousTag = parts.slice(3).join(' ');
-        return await processCalculation(message.channel, cmd, startNumber, newDropType, previousTag);
-    }
-
-    // STEP-BY-STEP MODE
-    if (['member', 'mini', 'perm'].includes(content.toLowerCase())) {
-        userState.set(userId, { step: 'waiting_for_number', status: content.toLowerCase() });
-        return message.reply("Please provide the Starting Party Number:");
-    }
-
-    if (userState.has(userId)) {
-        const state = userState.get(userId);
-        if (state.step === 'waiting_for_number') {
-            state.startNumber = parseInt(content.replace(/,/g, ''));
-            state.step = 'waiting_for_drop';
-            return message.reply("Please provide the Drop Type (and previous tag if stacking):");
-        }
-        if (state.step === 'waiting_for_drop') {
-            const dropParts = content.split(/\s+/);
-            await processCalculation(message.channel, state.status, state.startNumber, dropParts[0], dropParts.slice(1).join(' '));
-            userState.delete(userId);
-        }
-    }
-});
-
-client.login(process.env.DISCORD_TOKEN);
