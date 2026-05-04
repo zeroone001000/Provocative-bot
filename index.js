@@ -11,17 +11,6 @@ const multipliers = {
 async function processCalculation(channel, status, startNumber, newDropType, previousTag = null) {
     const mults = multipliers[status];
     
-    // 1. Get Tag Number if exists
-    let tagNumber = 0;
-    if (previousTag) {
-        const tagNumberMatch = previousTag.match(/(\d{1,3}(?:,\d{3})*|\d+)/);
-        if (tagNumberMatch) tagNumber = parseInt(tagNumberMatch[0].replace(/,/g, ''));
-    }
-    
-    // 2. Set effective start
-    const base = (startNumber !== null) ? startNumber : (tagNumber + 1);
-    
-    // 3. Extract drops
     const extractDrops = (input) => {
         const drops = { "🌭": 0, "🍖": 0, "🦴": 0, "🐾": 0 };
         const regex = /(\d+)(🌭|🍖|🦴|🐾)/g;
@@ -29,7 +18,9 @@ async function processCalculation(channel, status, startNumber, newDropType, pre
         while ((match = regex.exec(input)) !== null) {
             const count = parseInt(match[1]);
             const emoji = match[2];
-            if (drops.hasOwnProperty(emoji)) drops[emoji] += count;
+            if (drops.hasOwnProperty(emoji)) {
+                drops[emoji] += count;
+            }
         }
         return drops;
     };
@@ -46,7 +37,9 @@ async function processCalculation(channel, status, startNumber, newDropType, pre
 
     let combinedDropType = "";
     ["🌭", "🍖", "🦴", "🐾"].forEach(type => {
-        if (totalDrops[type] > 0) combinedDropType += `${totalDrops[type]}${type}`;
+        if (totalDrops[type] > 0) {
+            combinedDropType += `${totalDrops[type]}${type}`;
+        }
     });
 
     const newValue = (newDrops["🌭"] * mults["🌭"]) + 
@@ -54,7 +47,7 @@ async function processCalculation(channel, status, startNumber, newDropType, pre
                      (newDrops["🦴"] * mults["🦴"]) + 
                      (newDrops["🐾"] * mults["🐾"]);
     
-    const endingNumber = base + newValue - 1;
+    const endingNumber = startNumber + newValue - 1;
     const partiesAdded = newValue;
 
     await channel.send(`ʚ💘ɞ「${endingNumber.toLocaleString()} ⋆ ${combinedDropType}」`);
@@ -69,55 +62,36 @@ async function processCalculation(channel, status, startNumber, newDropType, pre
 
 client.on('messageCreate', async (message) => {
     if (message.author.bot) return;
-    const content = message.content;
     const userId = message.author.id;
-
-    const statusMatch = content.match(/\b(member|mini|perm)\b/i);
     
-    if (statusMatch) {
-        const status = statusMatch[1].toLowerCase();
-        const parts = content.split(/[|*]+|\s+/).filter(p => p.trim() !== '');
-        
-        let startNumber = null;
-        let newDropType = "";
-        let previousTag = "";
-
-        parts.forEach(part => {
-            part = part.trim();
-            if (/^\d{1,3}(?:,\d{3})*|\d+$/.test(part) && !part.match(/(🌭|🍖|🦴|🐾|ʚ|⋆|「)/)) {
-                startNumber = parseInt(part.replace(/,/g, ''));
-            } 
-            else if (part.includes('ʚ') || part.includes('⋆') || part.includes('「')) {
-                previousTag = part;
-            } 
-            else if (part.match(/\d+(🌭|🍖|🦴|🐾)/)) {
-                newDropType = part;
-            }
-        });
-
-        if (newDropType !== "" && (startNumber !== null || previousTag !== "")) {
+    const match = message.content.match(/^(\w+)\s+(\d{1,3}(?:,\d{3})*|\d+)\s+([^\s]+)(.*)/i);
+    if (match) {
+        const status = match[1].toLowerCase();
+        if (['member', 'mini', 'perm'].includes(status)) {
+            const startNumber = parseInt(match[2].replace(/,/g, ''));
+            const newDropType = match[3];
+            const previousTag = match[4].trim();
             return await processCalculation(message.channel, status, startNumber, newDropType, previousTag);
         }
     }
 
-    if (['member', 'mini', 'perm'].includes(content.toLowerCase())) {
-        userState.set(userId, { step: 'waiting_for_number', status: content.toLowerCase() });
-        return message.reply("Please provide the Starting Party Number (or just type Drop Type if you have a tag):");
+    if (['member', 'mini', 'perm'].includes(message.content.toLowerCase())) {
+        userState.set(userId, { step: 'waiting_for_number', status: message.content.toLowerCase() });
+        return message.reply("Please provide the Starting Party Number:");
     }
 
     if (userState.has(userId)) {
         const state = userState.get(userId);
         if (state.step === 'waiting_for_number') {
-            const val = parseInt(content.replace(/,/g, ''));
-            state.startNumber = isNaN(val) ? null : val;
+            const val = parseInt(message.content.replace(/,/g, ''));
+            if (isNaN(val)) return message.reply("Invalid number.");
+            state.startNumber = val;
             state.step = 'waiting_for_drop';
             return message.reply("Please provide the Drop Type (and previous tag if stacking):");
         }
         if (state.step === 'waiting_for_drop') {
-            const parts = content.split(/[|*]+|\s+/);
-            const drop = parts.find(p => p.match(/\d+(🌭|🍖|🦴|🐾)/));
-            const tag = parts.find(p => p.includes('ʚ') || p.includes('⋆') || p.includes('「')) || "";
-            await processCalculation(message.channel, state.status, state.startNumber, drop || "", tag);
+            const parts = message.content.split(/\s+/);
+            await processCalculation(message.channel, state.status, state.startNumber, parts[0], parts.slice(1).join(' '));
             userState.delete(userId);
         }
     }
