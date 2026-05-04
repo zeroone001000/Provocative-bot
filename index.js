@@ -11,7 +11,6 @@ const multipliers = {
 async function processCalculation(channel, status, startNumber, newDropType, previousTag = null) {
     const mults = multipliers[status];
     
-    // Logic to extract starting number from tag if no startNumber is provided (or if we prefer tag's value)
     let effectiveStart = startNumber;
     if (previousTag) {
         const tagNumberMatch = previousTag.match(/(\d{1,3}(?:,\d{3})*|\d+)/);
@@ -71,37 +70,62 @@ async function processCalculation(channel, status, startNumber, newDropType, pre
 
 client.on('messageCreate', async (message) => {
     if (message.author.bot) return;
+    const content = message.content;
     const userId = message.author.id;
+
+    // Pattern matches status (member/mini/perm), then looks for split parts regardless of separators
+    const statusMatch = content.match(/\b(member|mini|perm)\b/i);
     
-    // Quick Mode regex updated to handle cases where start number might be absent if tag is present
-    const match = message.content.match(/^(\w+)\s+(\d{1,3}(?:,\d{3})*|\d+)\s+([^\s]+)(.*)/i);
-    if (match) {
-        const status = match[1].toLowerCase();
-        if (['member', 'mini', 'perm'].includes(status)) {
-            const startNumber = parseInt(match[2].replace(/,/g, ''));
-            const newDropType = match[3];
-            const previousTag = match[4].trim();
+    if (statusMatch) {
+        const status = statusMatch[1].toLowerCase();
+        // Remove the status from content to find other components
+        const remaining = content.replace(statusMatch[0], '');
+        const parts = remaining.split(/[|*]+|\s+/).filter(p => p.trim() !== '');
+
+        let startNumber = null;
+        let newDropType = "";
+        let previousTag = "";
+
+        parts.forEach(part => {
+            part = part.trim();
+            // If it's a number (digits with optional comma)
+            if (/^\d{1,3}(?:,\d{3})*|\d+$/.test(part)) {
+                startNumber = parseInt(part.replace(/,/g, ''));
+            } 
+            // If it looks like a tag (contains ʚ or ⋆)
+            else if (part.includes('ʚ') || part.includes('⋆')) {
+                previousTag = part;
+            } 
+            // Otherwise treat as drop
+            else {
+                newDropType = part;
+            }
+        });
+
+        if (startNumber !== null && newDropType !== "") {
             return await processCalculation(message.channel, status, startNumber, newDropType, previousTag);
         }
     }
 
-    if (['member', 'mini', 'perm'].includes(message.content.toLowerCase())) {
-        userState.set(userId, { step: 'waiting_for_number', status: message.content.toLowerCase() });
+    if (['member', 'mini', 'perm'].includes(content.toLowerCase())) {
+        userState.set(userId, { step: 'waiting_for_number', status: content.toLowerCase() });
         return message.reply("Please provide the Starting Party Number:");
     }
 
     if (userState.has(userId)) {
         const state = userState.get(userId);
         if (state.step === 'waiting_for_number') {
-            const val = parseInt(message.content.replace(/,/g, ''));
+            const val = parseInt(content.replace(/,/g, ''));
             if (isNaN(val)) return message.reply("Invalid number.");
             state.startNumber = val;
             state.step = 'waiting_for_drop';
             return message.reply("Please provide the Drop Type (and previous tag if stacking):");
         }
         if (state.step === 'waiting_for_drop') {
-            const parts = message.content.split(/\s+/);
-            await processCalculation(message.channel, state.status, state.startNumber, parts[0], parts.slice(1).join(' '));
+            const parts = content.split(/[|*]+|\s+/);
+            const drop = parts.find(p => !p.includes('ʚ') && !p.includes('⋆'));
+            const tag = parts.find(p => p.includes('ʚ') || p.includes('⋆')) || "";
+            await processCalculation(message.channel, state.status, state.startNumber, drop || "", tag);
             userState.delete(userId);
         }
     }
