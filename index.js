@@ -12,14 +12,12 @@ async function processCalculation(channel, status, startNumber, newDropType, pre
     const mults = multipliers[status];
     
     // 1. Determine Starting Number
-    let effectiveStart = (startNumber !== null) ? startNumber : 0;
-    
+    let effectiveStart = startNumber !== null ? startNumber : 0;
     if (previousTag) {
-        // Look for the number at the beginning of the tag
         const tagNumberMatch = previousTag.match(/(\d{1,3}(?:,\d{3})*|\d+)/);
         if (tagNumberMatch) {
             const tagNumber = parseInt(tagNumberMatch[0].replace(/,/g, ''));
-            // If no startNumber was provided, use tagNumber + 1
+            // If no explicit startNumber provided, use tagNumber + 1
             if (startNumber === null) {
                 effectiveStart = tagNumber + 1;
             }
@@ -109,7 +107,7 @@ client.on('messageCreate', async (message) => {
 
     if (['member', 'mini', 'perm'].includes(content.toLowerCase())) {
         userState.set(userId, { step: 'waiting_for_number', status: content.toLowerCase() });
-        return message.reply("Please provide the Starting Party Number:");
+        return message.reply("Please provide the Starting Party Number (or just type Drop Type if you have a tag):");
     }
 
     if (userState.has(userId)) {
