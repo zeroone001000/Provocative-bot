@@ -8,68 +8,69 @@ const multipliers = {
     perm:   { "🌭": 70, "🍖": 35, "🦴": 70, "🐾": 13 }
 };
 
-// Helper function to handle calculation and messaging
-async function processCalculation(channel, status, startNumber, dropType) {
+async function processCalculation(channel, status, startNumber, newDropType, previousTag = null) {
     const mults = multipliers[status];
-    const getDrops = (type) => {
-        const regex = new RegExp(`(\\d+)${type}`);
-        const match = dropType.match(regex);
-        return match ? parseInt(match[1]) : 0;
+    
+    // 1. Combine Drop Types
+    let combinedDropType = newDropType;
+    if (previousTag) {
+        // Extract drops from previous tag (e.g., "1🌭" from "30,070 ⋆ 1🌭")
+        const oldDropsMatch = previousTag.match(/⋆\s*(.+?)」/);
+        if (oldDropsMatch) {
+            combinedDropType = oldDropsMatch[1] + newDropType;
+        }
+    }
+
+    // 2. Helper to calculate drops
+    const getDrops = (type, dropString) => {
+        const regex = new RegExp(`(\\d+)${type}`, 'g');
+        let total = 0;
+        let match;
+        while ((match = regex.exec(dropString)) !== null) {
+            total += parseInt(match[1]);
+        }
+        return total;
     };
 
-    const totalDrops = (getDrops("🌭") * mults["🌭"]) + (getDrops("🍖") * mults["🍖"]) + 
-                       (getDrops("🦴") * mults["🦴"]) + (getDrops("🐾") * mults["🐾"]);
+    const totalDropsValue = (getDrops("🌭", combinedDropType) * mults["🌭"]) + 
+                            (getDrops("🍖", combinedDropType) * mults["🍖"]) + 
+                            (getDrops("🦴", combinedDropType) * mults["🦴"]) + 
+                            (getDrops("🐾", combinedDropType) * mults["🐾"]);
     
-    const endingNumber = startNumber - 1 + totalDrops;
+    const endingNumber = startNumber - 1 + totalDropsValue;
     const partiesAdded = endingNumber - startNumber + 1;
 
-    // 1. Tag
-    await channel.send(`ʚ💘ɞ「${endingNumber.toLocaleString()} ⋆ ${dropType}」`);
+    // 3. Send Tag
+    await channel.send(`ʚ💘ɞ「${endingNumber.toLocaleString()} ⋆ ${combinedDropType}」`);
     
-    // 2. MP Message
+    // 4. Send MP
     if (status === "perm" || status === "mini") {
         await channel.send(`૮(˶ᵔ ᴥᵔ)ა   ɪғ sᴇᴇɴ, ᴘʟᴇᴀsᴇ ʀᴇᴛᴜʀɴ\n  /づ  \\づ.. ⸝⸝ ♡ ⸝⸝ ᴛᴏ ᴘʀᴏᴠᴏᴄᴀᴛɪᴠᴇ.\n━═━═━ [💘] • ᴄᴏʟʟᴀʀ #${endingNumber.toLocaleString()}`);
     } else {
-        await channel.send(`ɪғ sᴇᴇɴ, ᴘʟᴇᴀsᴇ ʀᴇᴛᴜʀɴ ᴛᴏ:\n૮(˶ᵔ ᴥᵔ)ა [💘] ${endingNumber.toLocaleString()} • ${dropType}\n  /づ  \\づ.. ⸝⸝ ♡ ᴘʀᴏᴠᴏᴄᴀᴛɪᴠᴇ\n━═━═━═━═━═━═━═`);
+        await channel.send(`ɪғ sᴇᴇɴ, ᴘʟᴇᴀsᴇ ʀᴇᴛᴜʀɴ ᴛᴏ:\n૮(˶ᵔ ᴥᵔ)ა [💘] ${endingNumber.toLocaleString()} • ${combinedDropType}\n  /づ  \\づ.. ⸝⸝ ♡ ᴘʀᴏᴠᴏᴄᴀᴛɪᴠᴇ\n━═━═━═━═━═━═━═`);
     }
 
-    // 3. Parties added
+    // 5. Parties added
     await channel.send(`**Parties Added: ${partiesAdded}**`);
 }
 
 client.on('messageCreate', async (message) => {
     if (message.author.bot) return;
-    const content = message.content.toLowerCase();
-    const parts = message.content.split(/\s+/);
+    const content = message.content;
+    const parts = content.split(/\s+/);
     const userId = message.author.id;
 
-    // --- QUICK MODE: "member 100 2🌭1🍖" ---
+    // QUICK MODE: "Member 30006 1🦴 ʚ💘ɞ「30,006 ⋆ 1🌭」"
     if (parts.length >= 3 && ['member', 'mini', 'perm'].includes(parts[0].toLowerCase())) {
-        return await processCalculation(message.channel, parts[0].toLowerCase(), parseInt(parts[1]), parts[2]);
-    }
+        const status = parts[0].toLowerCase();
+        const startNumber = parseInt(parts[1].replace(/,/g, ''));
+        const newDropType = parts[2];
+        const previousTag = parts.slice(3).join(' ');
 
-    // --- STEP-BY-STEP MODE ---
-    if (['member', 'mini', 'perm'].includes(content)) {
-        userState.set(userId, { step: 'waiting_for_number', status: content });
-        return message.reply("Please provide the Starting Party Number:");
+        return await processCalculation(message.channel, status, startNumber, newDropType, previousTag);
     }
-
-    if (userState.has(userId)) {
-        const state = userState.get(userId);
-        
-        if (state.step === 'waiting_for_number') {
-            const startNum = parseInt(content);
-            if (isNaN(startNum)) return message.reply("Please provide a valid number.");
-            state.startNumber = startNum;
-            state.step = 'waiting_for_drop';
-            return message.reply("Please provide the Drop Type:");
-        }
-
-        if (state.step === 'waiting_for_drop') {
-            await processCalculation(message.channel, state.status, state.startNumber, content);
-            userState.delete(userId);
-        }
-    }
+    
+    // (Keep your existing step-by-step logic here if needed)
 });
 
 client.login(process.env.DISCORD_TOKEN);
