@@ -1,35 +1,54 @@
 const { Client, GatewayIntentBits } = require('discord.js');
 const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent] });
 
+const userState = new Map();
 const multipliers = {
     member: { "🌭": 65, "🍖": 30, "🦴": 65, "🐾": 13 },
     mini:   { "🌭": 67, "🍖": 33, "🦴": 67, "🐾": 13 },
     perm:   { "🌭": 70, "🍖": 35, "🦴": 70, "🐾": 13 }
 };
 
-async function processCalculation(channel, status, startNumber, dropString) {
+async function processCalculation(channel, status, startNumber, newDropType, previousTag = null) {
     const mults = multipliers[status];
-    const drops = { "🌭": 0, "🍖": 0, "🦴": 0, "🐾": 0 };
     
-    // Only process the dropString passed by the filter
-    const regex = /(\d+)(🌭|🍖|🦴|🐾)/g;
-    let match;
-    while ((match = regex.exec(dropString)) !== null) {
-        const count = parseInt(match[1]);
-        const emoji = match[2];
-        if (drops.hasOwnProperty(emoji)) drops[emoji] += count;
-    }
+    const extractDrops = (input) => {
+        const drops = { "🌭": 0, "🍖": 0, "🦴": 0, "🐾": 0 };
+        const regex = /(\d+)(🌭|🍖|🦴|🐾)/g;
+        let match;
+        while ((match = regex.exec(input)) !== null) {
+            const count = parseInt(match[1]);
+            const emoji = match[2];
+            if (drops.hasOwnProperty(emoji)) {
+                drops[emoji] += count;
+            }
+        }
+        return drops;
+    };
 
-    const newValue = (drops["🌭"] * mults["🌭"]) + 
-                     (drops["🍖"] * mults["🍖"]) + 
-                     (drops["🦴"] * mults["🦴"]) + 
-                     (drops["🐾"] * mults["🐾"]);
+    const newDrops = extractDrops(newDropType);
+    const oldDrops = previousTag ? extractDrops(previousTag) : { "🌭": 0, "🍖": 0, "🦴": 0, "🐾": 0 };
+    
+    const totalDrops = {
+        "🌭": newDrops["🌭"] + oldDrops["🌭"],
+        "🍖": newDrops["🍖"] + oldDrops["🍖"],
+        "🦴": newDrops["🦴"] + oldDrops["🦴"],
+        "🐾": newDrops["🐾"] + oldDrops["🐾"]
+    };
+
+    let combinedDropType = "";
+    ["🌭", "🍖", "🦴", "🐾"].forEach(type => {
+        if (totalDrops[type] > 0) {
+            combinedDropType += `${totalDrops[type]}${type}`;
+        }
+    });
+
+    const newValue = (newDrops["🌭"] * mults["🌭"]) + 
+                     (newDrops["🍖"] * mults["🍖"]) + 
+                     (newDrops["🦴"] * mults["🦴"]) + 
+                     (newDrops["🐾"] * mults["🐾"]);
     
     const endingNumber = startNumber + newValue - 1;
-    const combinedDropType = Object.entries(drops)
-        .filter(([_, count]) => count > 0)
-        .map(([emoji, count]) => `${count}${emoji}`)
-        .join('');
+    const partiesAdded = newValue;
 
     await channel.send(`ʚ💘ɞ「${endingNumber.toLocaleString()} ⋆ ${combinedDropType}」`);
     
@@ -38,31 +57,43 @@ async function processCalculation(channel, status, startNumber, dropString) {
     } else {
         await channel.send(`ɪғ sᴇᴇɴ, ᴘʟᴇᴀsᴇ ʀᴇᴛᴜʀɴ ᴛᴏ:\n૮(˶ᵔ ᴥᵔ)ა [💘] ${endingNumber.toLocaleString()} • ${combinedDropType}\n  /づ  \\づ.. ⸝⸝ ♡ ᴘʀᴏᴠᴏᴄᴀᴛɪᴠᴇ\n━═━═━═━═━═━═━═`);
     }
-    await channel.send(`**Parties Added: ${newValue}**`);
+    await channel.send(`**Parties Added: ${partiesAdded}**`);
 }
 
 client.on('messageCreate', async (message) => {
     if (message.author.bot) return;
-
-    // 1. Identify Status
-    const statusMatch = message.content.match(/member|mini|perm/i);
-    if (!statusMatch) return;
-    const status = statusMatch[0].toLowerCase();
-
-    // 2. Remove the "tag" part (anything inside brackets/quotes) before finding drops
-    // This ignores ʚ💘ɞ「30,005 ⋆ 1🐾」 so it doesn't double count
-    const cleanContent = message.content.replace(/ʚ💘ɞ「.*?」/g, '');
-
-    // 3. Identify all numbers in the clean content
-    const allNumbers = cleanContent.match(/\d{1,3}(?:,\d{3})*|\d+/g)?.map(n => parseInt(n.replace(/,/g, ''))) || [];
-    const startNumber = allNumbers.length > 0 ? Math.max(...allNumbers) : null;
+    const userId = message.author.id;
     
-    // 4. Identify drops ONLY in the clean content
-    const dropMatches = cleanContent.match(/\d+(🌭|🍖|🦴|🐾)/g) || [];
-    const dropString = dropMatches.join('');
+    const match = message.content.match(/^(\w+)\s+(\d{1,3}(?:,\d{3})*|\d+)\s+([^\s]+)(.*)/i);
+    if (match) {
+        const status = match[1].toLowerCase();
+        if (['member', 'mini', 'perm'].includes(status)) {
+            const startNumber = parseInt(match[2].replace(/,/g, ''));
+            const newDropType = match[3];
+            const previousTag = match[4].trim();
+            return await processCalculation(message.channel, status, startNumber, newDropType, previousTag);
+        }
+    }
 
-    if (status && startNumber && dropString) {
-        await processCalculation(message.channel, status, startNumber, dropString);
+    if (['member', 'mini', 'perm'].includes(message.content.toLowerCase())) {
+        userState.set(userId, { step: 'waiting_for_number', status: message.content.toLowerCase() });
+        return message.reply("Please provide the Starting Party Number:");
+    }
+
+    if (userState.has(userId)) {
+        const state = userState.get(userId);
+        if (state.step === 'waiting_for_number') {
+            const val = parseInt(message.content.replace(/,/g, ''));
+            if (isNaN(val)) return message.reply("Invalid number.");
+            state.startNumber = val;
+            state.step = 'waiting_for_drop';
+            return message.reply("Please provide the Drop Type (and previous tag if stacking):");
+        }
+        if (state.step === 'waiting_for_drop') {
+            const parts = message.content.split(/\s+/);
+            await processCalculation(message.channel, state.status, state.startNumber, parts[0], parts.slice(1).join(' '));
+            userState.delete(userId);
+        }
     }
 });
 
