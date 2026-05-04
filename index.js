@@ -11,20 +11,18 @@ const multipliers = {
 async function processCalculation(channel, status, startNumber, newDropType, previousTag = null) {
     const mults = multipliers[status];
     
-    // Determine the starting number
+    // 1. Determine Starting Number
     let effectiveStart = startNumber;
     if (previousTag) {
-        // Look for the number inside the tag (e.g., "30,005" from "30,005 ⋆")
-        const tagNumberMatch = previousTag.match(/(\d{1,3}(?:,\d{3})*|\d+)/);
+        // Specifically extract the number at the start of the tag
+        const tagNumberMatch = previousTag.match(/^[^0-9]*(\d{1,3}(?:,\d{3})*|\d+)/);
         if (tagNumberMatch) {
-            const tagNumber = parseInt(tagNumberMatch[0].replace(/,/g, ''));
-            // If no start number provided, use tag number + 1
-            if (effectiveStart === null) {
-                effectiveStart = tagNumber + 1;
-            }
+            const tagNumber = parseInt(tagNumberMatch[1].replace(/,/g, ''));
+            if (effectiveStart === null) effectiveStart = tagNumber + 1;
         }
     }
     
+    // 2. Extract drops (only numbers attached to emojis)
     const extractDrops = (input) => {
         const drops = { "🌭": 0, "🍖": 0, "🦴": 0, "🐾": 0 };
         const regex = /(\d+)(🌭|🍖|🦴|🐾)/g;
@@ -32,9 +30,7 @@ async function processCalculation(channel, status, startNumber, newDropType, pre
         while ((match = regex.exec(input)) !== null) {
             const count = parseInt(match[1]);
             const emoji = match[2];
-            if (drops.hasOwnProperty(emoji)) {
-                drops[emoji] += count;
-            }
+            if (drops.hasOwnProperty(emoji)) drops[emoji] += count;
         }
         return drops;
     };
@@ -51,9 +47,7 @@ async function processCalculation(channel, status, startNumber, newDropType, pre
 
     let combinedDropType = "";
     ["🌭", "🍖", "🦴", "🐾"].forEach(type => {
-        if (totalDrops[type] > 0) {
-            combinedDropType += `${totalDrops[type]}${type}`;
-        }
+        if (totalDrops[type] > 0) combinedDropType += `${totalDrops[type]}${type}`;
     });
 
     const newValue = (newDrops["🌭"] * mults["🌭"]) + 
@@ -91,8 +85,8 @@ client.on('messageCreate', async (message) => {
 
         parts.forEach(part => {
             part = part.trim();
-            // Match standalone numbers that aren't inside the tag
-            if (/^\d{1,3}(?:,\d{3})*|\d+$/.test(part) && !part.includes('ʚ') && !part.includes('⋆') && !part.includes('🌭') && !part.includes('🐾') && !part.includes('🦴') && !part.includes('🍖')) {
+            // Regex: only match numbers that are NOT attached to an emoji
+            if (/^\d{1,3}(?:,\d{3})*|\d+$/.test(part) && !part.match(/(🌭|🍖|🦴|🐾)/)) {
                 startNumber = parseInt(part.replace(/,/g, ''));
             } 
             else if (part.includes('ʚ') || part.includes('⋆') || part.includes('「')) {
@@ -108,9 +102,10 @@ client.on('messageCreate', async (message) => {
         }
     }
 
+    // Step-by-step fallback
     if (['member', 'mini', 'perm'].includes(content.toLowerCase())) {
         userState.set(userId, { step: 'waiting_for_number', status: content.toLowerCase() });
-        return message.reply("Please provide the Starting Party Number (or just type Drop Type if you have a tag):");
+        return message.reply("Please provide the Starting Party Number:");
     }
 
     if (userState.has(userId)) {
