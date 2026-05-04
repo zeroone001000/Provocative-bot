@@ -12,13 +12,17 @@ async function processCalculation(channel, status, startNumber, newDropType, pre
     const mults = multipliers[status];
     
     // 1. Determine Starting Number
-    let effectiveStart = startNumber;
+    let effectiveStart = (startNumber !== null) ? startNumber : 0;
+    
     if (previousTag) {
-        // Specifically extract the number at the start of the tag
-        const tagNumberMatch = previousTag.match(/^[^0-9]*(\d{1,3}(?:,\d{3})*|\d+)/);
+        // Look for the number at the beginning of the tag
+        const tagNumberMatch = previousTag.match(/(\d{1,3}(?:,\d{3})*|\d+)/);
         if (tagNumberMatch) {
-            const tagNumber = parseInt(tagNumberMatch[1].replace(/,/g, ''));
-            if (effectiveStart === null) effectiveStart = tagNumber + 1;
+            const tagNumber = parseInt(tagNumberMatch[0].replace(/,/g, ''));
+            // If no startNumber was provided, use tagNumber + 1
+            if (startNumber === null) {
+                effectiveStart = tagNumber + 1;
+            }
         }
     }
     
@@ -50,6 +54,7 @@ async function processCalculation(channel, status, startNumber, newDropType, pre
         if (totalDrops[type] > 0) combinedDropType += `${totalDrops[type]}${type}`;
     });
 
+    // 3. Calculate math based on NEW drops only
     const newValue = (newDrops["🌭"] * mults["🌭"]) + 
                      (newDrops["🍖"] * mults["🍖"]) + 
                      (newDrops["🦴"] * mults["🦴"]) + 
@@ -85,8 +90,8 @@ client.on('messageCreate', async (message) => {
 
         parts.forEach(part => {
             part = part.trim();
-            // Regex: only match numbers that are NOT attached to an emoji
-            if (/^\d{1,3}(?:,\d{3})*|\d+$/.test(part) && !part.match(/(🌭|🍖|🦴|🐾)/)) {
+            // Match standalone numbers that aren't inside the tag
+            if (/^\d{1,3}(?:,\d{3})*|\d+$/.test(part) && !part.match(/(🌭|🍖|🦴|🐾|ʚ|⋆|「)/)) {
                 startNumber = parseInt(part.replace(/,/g, ''));
             } 
             else if (part.includes('ʚ') || part.includes('⋆') || part.includes('「')) {
@@ -102,7 +107,6 @@ client.on('messageCreate', async (message) => {
         }
     }
 
-    // Step-by-step fallback
     if (['member', 'mini', 'perm'].includes(content.toLowerCase())) {
         userState.set(userId, { step: 'waiting_for_number', status: content.toLowerCase() });
         return message.reply("Please provide the Starting Party Number:");
