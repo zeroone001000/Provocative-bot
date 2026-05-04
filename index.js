@@ -13,11 +13,11 @@ async function processCalculation(channel, status, startNumber, newDropType, pre
     
     const extractDrops = (input) => {
         const drops = { "🌭": 0, "🍖": 0, "🦴": 0, "🐾": 0 };
-        const regex = /(\d+)(🌭|🍖|🦴|🐾)?/g;
+        const regex = /(\d+)(🌭|🍖|🦴|🐾)/g;
         let match;
         while ((match = regex.exec(input)) !== null) {
             const count = parseInt(match[1]);
-            const emoji = match[2] || "🌭";
+            const emoji = match[2];
             if (drops.hasOwnProperty(emoji)) {
                 drops[emoji] += count;
             }
