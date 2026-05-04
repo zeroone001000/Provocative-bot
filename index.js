@@ -11,11 +11,17 @@ const multipliers = {
 async function processCalculation(channel, status, startNumber, newDropType, previousTag = null) {
     const mults = multipliers[status];
     
+    // Determine the starting number
     let effectiveStart = startNumber;
     if (previousTag) {
+        // Look for the number inside the tag (e.g., "30,005" from "30,005 ⋆")
         const tagNumberMatch = previousTag.match(/(\d{1,3}(?:,\d{3})*|\d+)/);
         if (tagNumberMatch) {
-            effectiveStart = parseInt(tagNumberMatch[0].replace(/,/g, '')) + 1;
+            const tagNumber = parseInt(tagNumberMatch[0].replace(/,/g, ''));
+            // If no start number provided, use tag number + 1
+            if (effectiveStart === null) {
+                effectiveStart = tagNumber + 1;
+            }
         }
     }
     
@@ -73,58 +79,52 @@ client.on('messageCreate', async (message) => {
     const content = message.content;
     const userId = message.author.id;
 
-    // Pattern matches status (member/mini/perm), then looks for split parts regardless of separators
     const statusMatch = content.match(/\b(member|mini|perm)\b/i);
     
     if (statusMatch) {
         const status = statusMatch[1].toLowerCase();
-        // Remove the status from content to find other components
-        const remaining = content.replace(statusMatch[0], '');
-        const parts = remaining.split(/[|*]+|\s+/).filter(p => p.trim() !== '');
-
+        const parts = content.split(/[|*]+|\s+/).filter(p => p.trim() !== '');
+        
         let startNumber = null;
         let newDropType = "";
         let previousTag = "";
 
         parts.forEach(part => {
             part = part.trim();
-            // If it's a number (digits with optional comma)
-            if (/^\d{1,3}(?:,\d{3})*|\d+$/.test(part)) {
+            // Match standalone numbers that aren't inside the tag
+            if (/^\d{1,3}(?:,\d{3})*|\d+$/.test(part) && !part.includes('ʚ') && !part.includes('⋆') && !part.includes('🌭') && !part.includes('🐾') && !part.includes('🦴') && !part.includes('🍖')) {
                 startNumber = parseInt(part.replace(/,/g, ''));
             } 
-            // If it looks like a tag (contains ʚ or ⋆)
-            else if (part.includes('ʚ') || part.includes('⋆')) {
+            else if (part.includes('ʚ') || part.includes('⋆') || part.includes('「')) {
                 previousTag = part;
             } 
-            // Otherwise treat as drop
-            else {
+            else if (part.match(/\d+(🌭|🍖|🦴|🐾)/)) {
                 newDropType = part;
             }
         });
 
-        if (startNumber !== null && newDropType !== "") {
+        if (newDropType !== "" && (startNumber !== null || previousTag !== "")) {
             return await processCalculation(message.channel, status, startNumber, newDropType, previousTag);
         }
     }
 
     if (['member', 'mini', 'perm'].includes(content.toLowerCase())) {
         userState.set(userId, { step: 'waiting_for_number', status: content.toLowerCase() });
-        return message.reply("Please provide the Starting Party Number:");
+        return message.reply("Please provide the Starting Party Number (or just type Drop Type if you have a tag):");
     }
 
     if (userState.has(userId)) {
         const state = userState.get(userId);
         if (state.step === 'waiting_for_number') {
             const val = parseInt(content.replace(/,/g, ''));
-            if (isNaN(val)) return message.reply("Invalid number.");
-            state.startNumber = val;
+            state.startNumber = isNaN(val) ? null : val;
             state.step = 'waiting_for_drop';
             return message.reply("Please provide the Drop Type (and previous tag if stacking):");
         }
         if (state.step === 'waiting_for_drop') {
             const parts = content.split(/[|*]+|\s+/);
-            const drop = parts.find(p => !p.includes('ʚ') && !p.includes('⋆'));
-            const tag = parts.find(p => p.includes('ʚ') || p.includes('⋆')) || "";
+            const drop = parts.find(p => p.match(/\d+(🌭|🍖|🦴|🐾)/));
+            const tag = parts.find(p => p.includes('ʚ') || p.includes('⋆') || p.includes('「')) || "";
             await processCalculation(message.channel, state.status, state.startNumber, drop || "", tag);
             userState.delete(userId);
         }
