@@ -11,22 +11,16 @@ const multipliers = {
 async function processCalculation(channel, status, startNumber, newDropType, previousTag = null) {
     const mults = multipliers[status];
     
-    // Determine the true starting number
-    let effectiveStart;
-    
-    // Extract the tag number if it exists
+    // 1. Determine Starting Number
     let tagNumber = 0;
     if (previousTag) {
         const tagNumberMatch = previousTag.match(/(\d{1,3}(?:,\d{3})*|\d+)/);
-        if (tagNumberMatch) {
-            tagNumber = parseInt(tagNumberMatch[0].replace(/,/g, ''));
-        }
+        if (tagNumberMatch) tagNumber = parseInt(tagNumberMatch[0].replace(/,/g, ''));
     }
-
-    // Logic: If startNumber is provided, use it. Otherwise, use Tag Number + 1.
-    effectiveStart = (startNumber !== null) ? startNumber : (tagNumber + 1);
     
-    // Extract drops
+    const effectiveStart = (startNumber !== null) ? startNumber : (tagNumber + 1);
+    
+    // 2. Extract drops
     const extractDrops = (input) => {
         const drops = { "🌭": 0, "🍖": 0, "🦴": 0, "🐾": 0 };
         const regex = /(\d+)(🌭|🍖|🦴|🐾)/g;
@@ -54,7 +48,7 @@ async function processCalculation(channel, status, startNumber, newDropType, pre
         if (totalDrops[type] > 0) combinedDropType += `${totalDrops[type]}${type}`;
     });
 
-    // New value calculation
+    // 3. Calculate math based on NEW drops only
     const newValue = (newDrops["🌭"] * mults["🌭"]) + 
                      (newDrops["🍖"] * mults["🍖"]) + 
                      (newDrops["🦴"] * mults["🦴"]) + 
