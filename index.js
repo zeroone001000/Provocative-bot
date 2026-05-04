@@ -11,20 +11,22 @@ const multipliers = {
 async function processCalculation(channel, status, startNumber, newDropType, previousTag = null) {
     const mults = multipliers[status];
     
-    // 1. Determine Starting Number
-    let effectiveStart = startNumber !== null ? startNumber : 0;
+    // Determine the true starting number
+    let effectiveStart;
+    
+    // Extract the tag number if it exists
+    let tagNumber = 0;
     if (previousTag) {
         const tagNumberMatch = previousTag.match(/(\d{1,3}(?:,\d{3})*|\d+)/);
         if (tagNumberMatch) {
-            const tagNumber = parseInt(tagNumberMatch[0].replace(/,/g, ''));
-            // If no explicit startNumber provided, use tagNumber + 1
-            if (startNumber === null) {
-                effectiveStart = tagNumber + 1;
-            }
+            tagNumber = parseInt(tagNumberMatch[0].replace(/,/g, ''));
         }
     }
+
+    // Logic: If startNumber is provided, use it. Otherwise, use Tag Number + 1.
+    effectiveStart = (startNumber !== null) ? startNumber : (tagNumber + 1);
     
-    // 2. Extract drops (only numbers attached to emojis)
+    // Extract drops
     const extractDrops = (input) => {
         const drops = { "🌭": 0, "🍖": 0, "🦴": 0, "🐾": 0 };
         const regex = /(\d+)(🌭|🍖|🦴|🐾)/g;
@@ -52,7 +54,7 @@ async function processCalculation(channel, status, startNumber, newDropType, pre
         if (totalDrops[type] > 0) combinedDropType += `${totalDrops[type]}${type}`;
     });
 
-    // 3. Calculate math based on NEW drops only
+    // New value calculation
     const newValue = (newDrops["🌭"] * mults["🌭"]) + 
                      (newDrops["🍖"] * mults["🍖"]) + 
                      (newDrops["🦴"] * mults["🦴"]) + 
@@ -88,7 +90,7 @@ client.on('messageCreate', async (message) => {
 
         parts.forEach(part => {
             part = part.trim();
-            // Match standalone numbers that aren't inside the tag
+            // Match standalone numbers that aren't inside a tag or drop string
             if (/^\d{1,3}(?:,\d{3})*|\d+$/.test(part) && !part.match(/(🌭|🍖|🦴|🐾|ʚ|⋆|「)/)) {
                 startNumber = parseInt(part.replace(/,/g, ''));
             } 
